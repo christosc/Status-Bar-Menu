@@ -74,9 +74,12 @@ void updateLocation(SCDynamicStoreRef	store, CFArrayRef changedKeys, void	*info)
 	//	SCPreferencesRef prefs = SCPreferencesCreate(NULL, CFSTR("Network Location Indicator"), NULL);
 	SCNetworkSetRef currLoc = SCNetworkSetCopyCurrent(prefs);
 	NSLog(@"info is of class:%@", [(id)info class]);
-	[[(id)info statusItem] setTitle:(NSString *)SCNetworkSetGetName(currLoc)];
+	NSString* currLocName = (NSString *)SCNetworkSetGetName(currLoc);
+	[[(id)info statusItem] setTitle:currLocName];
 	CFRelease(currLoc);
 	//	CFRelease(prefs);
+	[[statusMenu 
+	[[statusMenu itemWithTitle:currLocName] setState:NSOnState];
 	
 }
 
