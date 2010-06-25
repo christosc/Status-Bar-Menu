@@ -19,5 +19,5 @@
 }
 
 @property (assign) IBOutlet NSWindow *window;
-
+@property (readonly) NSStatusItem* statusItem;
 @end

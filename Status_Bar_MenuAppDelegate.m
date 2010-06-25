@@ -16,6 +16,7 @@
 static SCPreferencesRef prefs;
 
 @synthesize window;
+@synthesize statusItem;
 
 -(IBAction)changeLocation:(id)sender {
 	id loc = [sender representedObject];
@@ -48,6 +49,7 @@ static SCPreferencesRef prefs;
 		NSLog(@"Pref changes NOT applied!");
 	}
 
+//	[statusItem setTitle:(NSString*)SCNetworkSetGetName((SCNetworkSetRef)loc)];
 }
 
 -(void)makeLocationMenu {
@@ -66,6 +68,20 @@ static SCPreferencesRef prefs;
 	// πρὸς συμπλήρωσιν
 }
 
+
+void updateLocation(SCDynamicStoreRef	store, CFArrayRef changedKeys, void	*info) {
+	NSLog(@"updateLocation is being run!");
+	//	SCPreferencesRef prefs = SCPreferencesCreate(NULL, CFSTR("Network Location Indicator"), NULL);
+	SCNetworkSetRef currLoc = SCNetworkSetCopyCurrent(prefs);
+	NSLog(@"info is of class:%@", [(id)info class]);
+	[[(id)info statusItem] setTitle:(NSString *)SCNetworkSetGetName(currLoc)];
+	CFRelease(currLoc);
+	//	CFRelease(prefs);
+	
+}
+
+
+
 - (void)awakeFromNib {
 	statusItem = [[NSStatusBar systemStatusBar] statusItemWithLength:(CGFloat)37];
 	[statusItem retain];
@@ -73,7 +89,20 @@ static SCPreferencesRef prefs;
 	// Προτοῦ ἀναθέσω τὸν κατάλογο (menu) μὲ τὰς θέσεις, νά το φτειάξω
 	[self makeLocationMenu];
 	[statusItem setMenu:statusMenu];
-	[statusItem setTitle:@"Test"];
+	SCNetworkSetRef currentLoc = SCNetworkSetCopyCurrent(prefs);
+	[statusItem setTitle:(NSString*) SCNetworkSetGetName(currentLoc)];
+	[statusItem setToolTip:@"Current network location"];
+	
+	SCDynamicStoreContext context = {0, self, NULL, NULL, NULL};
+	SCDynamicStoreRef dynStore = SCDynamicStoreCreate(NULL, CFSTR("Network Location Indicator"), updateLocation, &context);  
+	CFStringRef key[1] = {CFSTR("Setup:")};
+	CFArrayRef keyArray = CFArrayCreate(NULL, (const void **)key, 1, &kCFTypeArrayCallBacks);
+	SCDynamicStoreSetNotificationKeys(dynStore, keyArray, NULL);
+	CFRelease(keyArray);
+	CFRunLoopSourceRef storeRLSource = SCDynamicStoreCreateRunLoopSource(NULL, dynStore, 0);
+	CFRunLoopAddSource(CFRunLoopGetCurrent(), storeRLSource, kCFRunLoopCommonModes);
+	CFRelease(storeRLSource);
+	CFRelease(dynStore);
 }
 
 
