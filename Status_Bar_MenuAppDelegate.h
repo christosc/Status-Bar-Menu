@@ -20,4 +20,5 @@
 
 @property (assign) IBOutlet NSWindow *window;
 @property (readonly) NSStatusItem* statusItem;
+@property (readonly) NSMenu* statusMenu;
 @end

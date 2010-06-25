@@ -13,37 +13,45 @@
 
 @implementation Status_Bar_MenuAppDelegate
 
-static SCPreferencesRef prefs;
+static SCPreferencesRef PREFS;
+static AuthorizationRef AUTH_REF;
+static SCNetworkSetRef  CURRENT_NETWORKSET;
 
 @synthesize window;
 @synthesize statusItem;
+@synthesize statusMenu;
 
 -(IBAction)changeLocation:(id)sender {
-	id loc = [sender representedObject];
-	if(SCNetworkSetSetCurrent((SCNetworkSetRef) loc)) {
-		NSLog(@"name in \"loc\" = %@", SCNetworkSetGetName((SCNetworkSetRef) loc));
+	//CFStringRef setID = (CFStringRef)[sender representedObject];
+	//SCNetworkSetRef setToChange = SCNetworkSetCopy(PREFS, setID);
+	SCNetworkSetRef setToChange = (SCNetworkSetRef)[sender representedObject];
+	if(SCNetworkSetSetCurrent(setToChange)) {
+		NSLog(@"name in \"loc\" = %@", SCNetworkSetGetName(setToChange));
 		NSLog(@"Current NetworkSet changed!");
 	}
 	else {
-		NSLog(@"name in \"loc\" = %@", SCNetworkSetGetName((SCNetworkSetRef) loc));
+		NSLog(@"name in \"loc\" = %@", SCNetworkSetGetName(setToChange));
 		NSLog(@"Current NetworkSet NOT changed!");
 	}
+	//SCPreferencesRef prefs = SCPreferencesCreateWithAuthorization(NULL, CFSTR("Status Bar Menu"), NULL, authRef);
+	//SCPreferencesCommitChanges(prefs);
+//	SCPreferencesApplyChanges(prefs);
+
 	
-	
-	if(SCPreferencesUnlock(prefs))
+	if(SCPreferencesUnlock(PREFS))
 		NSLog(@"prefs unlock!");
 	else {
 		NSLog(@"prefs NOT unlocked!");
 	}
 	
-	if(SCPreferencesCommitChanges(prefs))
+	if(SCPreferencesCommitChanges(PREFS))
 		NSLog(@"Pref changes commited!");
 	else {
 		NSLog(@"Pref changes NOT commited!");
 	}
 	
 	
-	if(SCPreferencesApplyChanges(prefs))
+	if(SCPreferencesApplyChanges(PREFS))
 		NSLog(@"Pref changes applied!");
 	else {
 		NSLog(@"Pref changes NOT applied!");
@@ -52,16 +60,22 @@ static SCPreferencesRef prefs;
 //	[statusItem setTitle:(NSString*)SCNetworkSetGetName((SCNetworkSetRef)loc)];
 }
 
--(void)makeLocationMenu {
-	AuthorizationRef authRef;
-	AuthorizationCreate(NULL, kAuthorizationEmptyEnvironment, kAuthorizationFlagDefaults, &authRef);
-	prefs = SCPreferencesCreateWithAuthorization(NULL, CFSTR("Status Bar Menu"), NULL, authRef);//(NULL, CFSTR("Status Bar Menu"), NULL);
-	NSArray *locations = (NSArray*) SCNetworkSetCopyAll(prefs);
+-(IBAction)terminate:(id)sender{
+	[NSApp terminate:self];
+}
+
+-(void)makeMenu {
+	NSArray *locations = (NSArray*) SCNetworkSetCopyAll(PREFS);
 	for(id loc in locations) {
-		NSMenuItem *mItem = [[NSMenuItem alloc] initWithTitle:(NSString*)SCNetworkSetGetName((SCNetworkSetRef)loc) action:@selector(changeLocation:) keyEquivalent:@""];
+		NSString * locName = (NSString*)SCNetworkSetGetName((SCNetworkSetRef)loc);
+		NSMenuItem *mItem = [[NSMenuItem alloc] initWithTitle:locName action:@selector(changeLocation:) keyEquivalent:@""];
 		[mItem setRepresentedObject:loc];
 		[statusMenu addItem:mItem];
+		[mItem release];
 	}
+	[statusMenu addItem:[NSMenuItem separatorItem]];
+	[statusMenu addItemWithTitle:@"Quit" action:@selector(terminate:) keyEquivalent:@""];
+	CFRelease(locations);
 }
 
 - (void)applicationDidFinishLaunching:(NSNotification *)aNotification {
@@ -69,17 +83,29 @@ static SCPreferencesRef prefs;
 }
 
 
-void updateLocation(SCDynamicStoreRef	store, CFArrayRef changedKeys, void	*info) {
+void updateLocationIndication(SCDynamicStoreRef	store, CFArrayRef changedKeys, void	*info) {
 	NSLog(@"updateLocation is being run!");
 	//	SCPreferencesRef prefs = SCPreferencesCreate(NULL, CFSTR("Network Location Indicator"), NULL);
-	SCNetworkSetRef currLoc = SCNetworkSetCopyCurrent(prefs);
-	NSLog(@"info is of class:%@", [(id)info class]);
-	NSString* currLocName = (NSString *)SCNetworkSetGetName(currLoc);
-	[[(id)info statusItem] setTitle:currLocName];
-	CFRelease(currLoc);
+//	SCNetworkSetRef currentNetworkSet = SCNetworkSetCopy(PREFS, CURRENT_NETWORKSET_ID);
+	[[[(id)info statusMenu] itemWithTitle:(NSString*)SCNetworkSetGetName(CURRENT_NETWORKSET)] setState:NSOffState];
+	SCPreferencesSynchronize(PREFS);
+	CURRENT_NETWORKSET = SCNetworkSetCopyCurrent(PREFS);							
+	//CURRENT_NETWORKSET = SCNetworkSetGetSetID(currentNetworkSet);
+	NSLog(@"updateLocation: \"info\" is of class:%@", [(id)info class]);
+	NSString* currSetName = (NSString *)SCNetworkSetGetName(CURRENT_NETWORKSET);
+	[[(id)info statusItem] setTitle:currSetName];
+//	CFRelease(currLoc);
 	//	CFRelease(prefs);
-	[[statusMenu 
-	[[statusMenu itemWithTitle:currLocName] setState:NSOnState];
+	// Βρὲς menu item ποῦ εἶναι σεσημασμένον, γιὰ νά το ἀποσημάνουμε
+//	NSMenuItem *currItem;
+//	for(NSMenuItem *item in [[(id)info statusMenu] itemArray]) {
+//		if ([item state] == NSOnState) {
+//			[item setState:NSOffState];
+//			break;
+//		}
+//	}
+	[[[(id)info statusMenu] itemWithTitle:currSetName] setState:NSOnState];
+//	[[(id)info statusItem] setTitle:currLocName];
 	
 }
 
@@ -90,14 +116,20 @@ void updateLocation(SCDynamicStoreRef	store, CFArrayRef changedKeys, void	*info)
 	[statusItem retain];
 	[statusItem setHighlightMode:YES];
 	// Προτοῦ ἀναθέσω τὸν κατάλογο (menu) μὲ τὰς θέσεις, νά το φτειάξω
-	[self makeLocationMenu];
+//	AuthorizationRef authRef;
+	AuthorizationCreate(NULL, kAuthorizationEmptyEnvironment, kAuthorizationFlagDefaults, &AUTH_REF);
+	PREFS = SCPreferencesCreateWithAuthorization(NULL, CFSTR("Status Bar Menu"), NULL, AUTH_REF);
+	
+	[self makeMenu];
 	[statusItem setMenu:statusMenu];
-	SCNetworkSetRef currentLoc = SCNetworkSetCopyCurrent(prefs);
-	[statusItem setTitle:(NSString*) SCNetworkSetGetName(currentLoc)];
+	CURRENT_NETWORKSET = SCNetworkSetCopyCurrent(PREFS);
+	NSString* currentLocName = (NSString*) SCNetworkSetGetName(CURRENT_NETWORKSET); 
+	[statusItem setTitle:currentLocName];
+	[[statusMenu itemWithTitle:currentLocName] setState:NSOnState];
 	[statusItem setToolTip:@"Current network location"];
 	
 	SCDynamicStoreContext context = {0, self, NULL, NULL, NULL};
-	SCDynamicStoreRef dynStore = SCDynamicStoreCreate(NULL, CFSTR("Network Location Indicator"), updateLocation, &context);  
+	SCDynamicStoreRef dynStore = SCDynamicStoreCreate(NULL, CFSTR("Network Location Indicator"), updateLocationIndication, &context);  
 	CFStringRef key[1] = {CFSTR("Setup:")};
 	CFArrayRef keyArray = CFArrayCreate(NULL, (const void **)key, 1, &kCFTypeArrayCallBacks);
 	SCDynamicStoreSetNotificationKeys(dynStore, keyArray, NULL);
